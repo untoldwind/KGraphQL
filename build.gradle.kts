@@ -20,7 +20,7 @@ allprojects {
 }
 
 subprojects {
-    group = "com.github.untoldwind"
+    group = "com.github.untoldwind.KGraphQL"
     version = version
 
     apply<MavenPublishPlugin>()
