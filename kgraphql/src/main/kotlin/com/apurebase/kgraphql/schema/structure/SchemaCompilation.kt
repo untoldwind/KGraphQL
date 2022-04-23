@@ -24,8 +24,10 @@ import com.apurebase.kgraphql.schema.model.SchemaDefinition
 import com.apurebase.kgraphql.schema.model.Transformation
 import com.apurebase.kgraphql.schema.model.TypeDef
 import kotlin.reflect.KClass
+import kotlin.reflect.KClassifier
 import kotlin.reflect.KProperty1
 import kotlin.reflect.KType
+import kotlin.reflect.KVariance
 import kotlin.reflect.KVisibility
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.jvmErasure
@@ -165,7 +167,8 @@ class SchemaCompilation(
             kType.jvmErasure == Context::class && typeCategory == TypeCategory.INPUT -> contextType
             kType.jvmErasure == Execution.Node::class && typeCategory == TypeCategory.INPUT -> executionType
             kType.jvmErasure == Context::class && typeCategory == TypeCategory.QUERY -> throw SchemaException("Context type cannot be part of schema")
-            kType.arguments.isNotEmpty() -> throw SchemaException("Generic types are not supported by GraphQL, found $kType")
+            kType.arguments.filter { it.type == null }.isNotEmpty() || kType.jvmErasure.isSubclassOf(Function::class) -> throw SchemaException("Generic types are not supported by GraphQL, found $kType")
+            kType.arguments.isNotEmpty() -> handleGenericType(kType, typeCategory)
             kType.jvmErasure.isSealed -> TypeDef.Union(
                 name = kType.jvmErasure.simpleName!!,
                 members = kType.jvmErasure.sealedSubclasses.toSet(),
@@ -197,6 +200,12 @@ class SchemaCompilation(
         return applyNullability(kType, simpleType)
     }
 
+    private suspend fun handleGenericType(kType: KType, typeCategory: TypeCategory): Type {
+        val erasure = kType.jvmErasure
+        val type = handleRawType(erasure, typeCategory, erasure.typeParameters.zip(kType.arguments).map { it.first to handlePossiblyWrappedType(it.second.type!!, TypeCategory.QUERY) }.toMap())
+        return applyNullability(kType, type)
+    }
+
     private fun applyNullability(kType: KType, simpleType: Type): Type {
         if (!kType.isMarkedNullable) {
             return Type.NonNull(simpleType)
@@ -205,7 +214,7 @@ class SchemaCompilation(
         }
     }
 
-    private suspend fun handleRawType(kClass: KClass<*>, typeCategory: TypeCategory) : Type {
+    private suspend fun handleRawType(kClass: KClass<*>, typeCategory: TypeCategory, typeArguments : Map<KClassifier?, Type>? = null) : Type {
         when (val type = unions.find { it.name == kClass.simpleName }) {
             null -> Unit
             else -> return type
@@ -223,7 +232,7 @@ class SchemaCompilation(
             ?: enums[kClass]
             ?: scalars[kClass]
             ?: when(typeCategory) {
-                TypeCategory.QUERY -> handleObjectType(kClass)
+                TypeCategory.QUERY -> handleObjectType(kClass, typeArguments)
                 TypeCategory.INPUT -> handleInputType(kClass)
             }
     }
@@ -242,10 +251,10 @@ class SchemaCompilation(
         )
     }
 
-    private suspend fun handleObjectType(kClass: KClass<*>) : Type {
+    private suspend fun handleObjectType(kClass: KClass<*>, typeArguments: Map<KClassifier?, Type>? = null) : Type {
         assertValidObjectType(kClass)
         val objectDefs = definition.objects.filter { it.kClass.isSuperclassOf(kClass) }
-        val objectDef = objectDefs.find { it.kClass == kClass } ?: TypeDef.Object(kClass.defaultKQLTypeName(), kClass)
+        val objectDef = objectDefs.find { it.kClass == kClass } ?: TypeDef.Object(kClass.defaultKQLTypeName(typeArguments?.values?.map { "_${it.ofType?.name}" }?.joinToString("") ?: ""), kClass)
 
         //treat introspection types as objects -> adhere to reference implementation behaviour
         val kind = if(kClass.isFinal || objectDef.name.startsWith("__")) TypeKind.OBJECT else TypeKind.INTERFACE
@@ -267,7 +276,8 @@ class SchemaCompilation(
                 .map { property -> handleKotlinProperty (
                         kProperty = property,
                         kqlProperty = allKotlinProperties[property.name],
-                        transformation = allTransformations[property.name]
+                        transformation = allTransformations[property.name],
+                        typeArguments = typeArguments
                 ) }
 
         val extensionFields = objectDefs
@@ -368,9 +378,11 @@ class SchemaCompilation(
     private suspend fun <T : Any, R> handleKotlinProperty (
             kProperty: KProperty1<T, R>,
             kqlProperty: PropertyDef.Kotlin<*, *>?,
-            transformation: Transformation<*, *>?
+            transformation: Transformation<*, *>?,
+            typeArguments: Map<KClassifier?, Type>? = null
     ) : Field.Kotlin<*, *> {
-        val returnType = handlePossiblyWrappedType(kProperty.returnType, TypeCategory.QUERY)
+        val returnType = typeArguments?.get(kProperty.returnType.classifier) ?: handlePossiblyWrappedType(kProperty.returnType, TypeCategory.QUERY)
+
         val inputValues = if(transformation != null){
             handleInputValues("$kProperty transformation", transformation.transformation, emptyList())
         } else {

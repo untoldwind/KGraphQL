@@ -9,7 +9,7 @@ import kotlin.reflect.KType
 import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.jvm.jvmErasure
 
-internal fun <T : Any> KClass<T>.defaultKQLTypeName() = this.simpleName!!
+internal fun <T : Any> KClass<T>.defaultKQLTypeName(suffix: String = "") = this.simpleName!! + suffix
 
 internal fun KType.defaultKQLTypeName() = this.jvmErasure.defaultKQLTypeName()
 

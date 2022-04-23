@@ -305,13 +305,30 @@ class SchemaBuilderTest {
 
     @Test
     fun `generic types are not supported`(){
-        expect<SchemaException>("Generic types are not supported by GraphQL, found kotlin.Pair<kotlin.Int, kotlin.String>"){
+        expect<SchemaException>("Generic types are not supported by GraphQL, found kotlin.Pair<*, *>"){
             defaultSchema {
                 query("data"){
-                    resolver { int: Int, string: String -> int to string }
+                    resolver { int: Int, string: String -> (int to string) as Pair<*, *> }
                 }
             }
         }
+    }
+
+    @Test
+    fun `support for concrete generate parameters`(){
+        val schema = defaultSchema {
+            query("pair"){
+                resolver { int: Int, string: String -> (int to string) }
+            }
+        }
+
+        val typesIntrospection = deserialize(schema.executeBlocking("{__schema{queryType{fields{type { ofType { kind name fields { name type { kind ofType { kind name } }} }}}}}}"))
+        val expectedType = "{kind=OBJECT, name=Pair_Int_String, fields=[{name=first, type={kind=NON_NULL, ofType={kind=SCALAR, name=Int}}}, {name=second, type={kind=NON_NULL, ofType={kind=SCALAR, name=String}}}]}"
+        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[0]/type/ofType").toString(), equalTo(expectedType))
+
+        val query = deserialize(schema.executeBlocking("{ pair(int: 12, string: \"abc\") { first second } }"))
+        assertThat(query.extract<Int>("data/pair/first"), equalTo(12))
+        assertThat(query.extract<String>("data/pair/second"), equalTo("abc"))
     }
 
     @Test
