@@ -102,11 +102,11 @@ publishing {
     }
 }
 
-signing {
-    isRequired = isReleaseVersion
-    useInMemoryPgpKeys(
-        System.getenv("ORG_GRADLE_PROJECT_signingKey"),
-        System.getenv("ORG_GRADLE_PROJECT_signingPassword")
-    )
-    sign(publishing.publications["maven"])
-}
+//signing {
+//    isRequired = isReleaseVersion
+//    useInMemoryPgpKeys(
+//        System.getenv("ORG_GRADLE_PROJECT_signingKey"),
+//        System.getenv("ORG_GRADLE_PROJECT_signingPassword")
+//    )
+//    sign(publishing.publications["maven"])
+//}
