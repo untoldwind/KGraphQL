@@ -10,6 +10,7 @@ import com.apurebase.kgraphql.request.Parser
 import com.apurebase.kgraphql.schema.execution.*
 import com.apurebase.kgraphql.schema.execution.Executor.*
 import com.apurebase.kgraphql.schema.model.ast.NameNode
+import com.apurebase.kgraphql.schema.structure.ClassRef
 import com.apurebase.kgraphql.schema.structure.LookupSchema
 import com.apurebase.kgraphql.schema.structure.RequestInterpreter
 import com.apurebase.kgraphql.schema.structure.SchemaModel
@@ -55,11 +56,11 @@ class DefaultSchema (
         )
     }
 
-    override fun typeByKClass(kClass: KClass<*>): Type? = model.queryTypes[kClass]
+    override fun typeByKClass(kClass: KClass<*>): Type? = model.queryTypes[ClassRef(kClass)]
 
     override fun typeByKType(kType: KType): Type? = typeByKClass(kType.jvmErasure)
 
-    override fun inputTypeByKClass(kClass: KClass<*>): Type? = model.inputTypes[kClass]
+    override fun inputTypeByKClass(kClass: KClass<*>): Type? = model.inputTypes[ClassRef(kClass)]
 
     override fun inputTypeByKType(kType: KType): Type? = typeByKClass(kType.jvmErasure)
 

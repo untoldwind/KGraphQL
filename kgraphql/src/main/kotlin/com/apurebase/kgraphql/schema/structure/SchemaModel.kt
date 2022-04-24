@@ -5,8 +5,15 @@ import com.apurebase.kgraphql.schema.introspection.NotIntrospected
 import com.apurebase.kgraphql.schema.introspection.__Schema
 import com.apurebase.kgraphql.schema.introspection.__Type
 import kotlin.reflect.KClass
+import kotlin.reflect.KClassifier
+import kotlin.reflect.KType
 import kotlin.reflect.full.findAnnotation
+import kotlin.reflect.jvm.jvmErasure
 
+data class ClassRef(val kClass : KClass<*>, val arguments: List<KClass<*>> = listOf()) {
+    constructor(kClass : KClass<*>, typeArguments : Map<KClassifier?, KType>?) :
+            this(kClass, kClass.typeParameters.map { typeArguments?.get(it) }.filterNotNull().map { it.jvmErasure }.toList()) {}
+}
 
 data class SchemaModel (
     val query: Type,
@@ -16,8 +23,8 @@ data class SchemaModel (
     val scalars : Map<KClass<*>, Type.Scalar<*>>,
     val unions : List<Type.Union>,
     val allTypes : List<Type>,
-    val queryTypes: Map<KClass<*>, Type>,
-    val inputTypes: Map<KClass<*>, Type>,
+    val queryTypes: Map<ClassRef, Type>,
+    val inputTypes: Map<ClassRef, Type>,
     override val directives: List<Directive>
 ) : __Schema {
 
