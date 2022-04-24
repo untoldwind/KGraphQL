@@ -161,9 +161,9 @@ class SchemaCompilation(
         return Field.Union(unionProperty, unionProperty.nullable, type, inputValues)
     }
 
-    private suspend fun handlePossiblyWrappedType(kType : KType, typeCategory: TypeCategory) : Type = try {
+    private suspend fun handlePossiblyWrappedType(kType : KType, typeCategory: TypeCategory, typeArguments : Map<KClassifier?, Type>? = null) : Type = try {
         when {
-            kType.isIterable() -> handleCollectionType(kType, typeCategory)
+            kType.isIterable() -> handleCollectionType(kType, typeCategory, typeArguments)
             kType.jvmErasure == Context::class && typeCategory == TypeCategory.INPUT -> contextType
             kType.jvmErasure == Execution.Node::class && typeCategory == TypeCategory.INPUT -> executionType
             kType.jvmErasure == Context::class && typeCategory == TypeCategory.QUERY -> throw SchemaException("Context type cannot be part of schema")
@@ -184,14 +184,14 @@ class SchemaCompilation(
         }
     }
 
-    private suspend fun handleCollectionType(kType: KType, typeCategory: TypeCategory): Type {
+    private suspend fun handleCollectionType(kType: KType, typeCategory: TypeCategory, typeArguments : Map<KClassifier?, Type>? = null): Type {
         val type = when {
             kType.getIterableElementType() != null -> kType.getIterableElementType()
             kType.arguments.size == 1 -> kType.arguments.first().type
             else -> null
         } ?: throw throw SchemaException("Cannot handle collection without element type")
 
-        val nullableListType = Type.AList(handleSimpleType(type, typeCategory))
+        val nullableListType = Type.AList(lookupTypeArgument(type, typeArguments) ?: handleSimpleType(type, typeCategory))
         return applyNullability(kType, nullableListType)
     }
 
@@ -381,7 +381,7 @@ class SchemaCompilation(
             transformation: Transformation<*, *>?,
             typeArguments: Map<KClassifier?, Type>? = null
     ) : Field.Kotlin<*, *> {
-        val returnType = typeArguments?.get(kProperty.returnType.classifier) ?: handlePossiblyWrappedType(kProperty.returnType, TypeCategory.QUERY)
+        val returnType = lookupTypeArgument(kProperty.returnType, typeArguments) ?: handlePossiblyWrappedType(kProperty.returnType, TypeCategory.QUERY, typeArguments)
 
         val inputValues = if(transformation != null){
             handleInputValues("$kProperty transformation", transformation.transformation, emptyList())
@@ -397,5 +397,14 @@ class SchemaCompilation(
                 arguments = inputValues,
                 transformation = transformation as Transformation<T, R>?
         )
+    }
+
+    private fun lookupTypeArgument(kType: KType, typeArguments: Map<KClassifier?, Type>? = null) : Type? {
+        val type = typeArguments?.get(kType.classifier) ?: return null
+
+        if(kType.isMarkedNullable && type is Type.NonNull) {
+            return type.ofType
+        }
+        return type
     }
 }
