@@ -315,7 +315,7 @@ class SchemaBuilderTest {
     }
 
     @Test
-    fun `support for concrete generate parameters`(){
+    fun `support for concrete generatic parameters`(){
         val schema = defaultSchema {
             query("pair"){
                 resolver { int: Int, string: String -> (int to string) }
@@ -329,6 +329,24 @@ class SchemaBuilderTest {
         val query = deserialize(schema.executeBlocking("{ pair(int: 12, string: \"abc\") { first second } }"))
         assertThat(query.extract<Int>("data/pair/first"), equalTo(12))
         assertThat(query.extract<String>("data/pair/second"), equalTo("abc"))
+    }
+
+    @Test
+    fun `support for collections with type parameters`() {
+        val schema = defaultSchema {
+            query("pageable"){
+                resolver { count: Long, string: String -> Pageable(count, string, listOf(string)) }
+            }
+        }
+
+        val typesIntrospection = deserialize(schema.executeBlocking("{__schema{queryType{fields{type { ofType { kind name fields { name type { kind name ofType { kind name ofType { kind name ofType { name kind }} } }} }}}}}}"))
+        val expectedType = "{kind=OBJECT, name=Pageable_String, fields=[{name=first, type={kind=SCALAR, name=String, ofType=null}}, {name=items, type={kind=NON_NULL, name=null, ofType={kind=LIST, name=null, ofType={kind=NON_NULL, name=null, ofType={name=String, kind=SCALAR}}}}}, {name=total, type={kind=NON_NULL, name=null, ofType={kind=SCALAR, name=Long, ofType=null}}}]}"
+        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[0]/type/ofType").toString(), equalTo(expectedType))
+
+        val query = deserialize(schema.executeBlocking("{ pageable(count: 12, string: \"abc\") { total first items } }"))
+        assertThat(query.extract<Int>("data/pageable/total"), equalTo(12))
+        assertThat(query.extract<String>("data/pageable/first"), equalTo("abc"))
+        assertThat(query.extract<String>("data/pageable/items[0]"), equalTo("abc"))
     }
 
     @Test
