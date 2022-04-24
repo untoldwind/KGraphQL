@@ -4,6 +4,7 @@ import com.apurebase.kgraphql.*
 import com.apurebase.kgraphql.schema.dsl.SchemaBuilder
 import com.apurebase.kgraphql.schema.introspection.TypeKind
 import com.apurebase.kgraphql.schema.scalar.StringScalarCoercion
+import com.apurebase.kgraphql.schema.structure.ClassRef
 import com.apurebase.kgraphql.schema.structure.Field
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -49,7 +50,7 @@ class SchemaBuilderTest {
             }
         }
 
-        val scenarioType = testedSchema.model.queryTypes[Scenario::class]
+        val scenarioType = testedSchema.model.queryTypes[ClassRef(Scenario::class)]
                 ?: throw Exception("Scenario type should be present in schema")
         assertThat(scenarioType["author"], nullValue())
         assertThat(scenarioType["content"], notNullValue())
@@ -63,7 +64,7 @@ class SchemaBuilderTest {
             }
         }
 
-        val scenarioType = testedSchema.model.queryTypes[Account::class]
+        val scenarioType = testedSchema.model.queryTypes[ClassRef(Account::class)]
                 ?: throw Exception("Account type should be present in schema")
 
         // id should exist because it is public
@@ -89,7 +90,7 @@ class SchemaBuilderTest {
                 })
             }
         }
-        val scenarioType = testedSchema.model.queryTypes[Scenario::class]
+        val scenarioType = testedSchema.model.queryTypes[ClassRef(Scenario::class)]
                 ?: throw Exception("Scenario type should be present in schema")
         assertThat(scenarioType.kind, equalTo(TypeKind.OBJECT))
         assertThat(scenarioType["content"], notNullValue())
@@ -111,7 +112,7 @@ class SchemaBuilderTest {
             }
         }
 
-        val scenarioType = testedSchema.model.queryTypes[Scenario::class]
+        val scenarioType = testedSchema.model.queryTypes[ClassRef(Scenario::class)]
                 ?: throw Exception("Scenario type should be present in schema")
 
         assertThat(scenarioType.kind, equalTo(TypeKind.OBJECT))
@@ -147,7 +148,7 @@ class SchemaBuilderTest {
             }
         }
 
-        val scenarioType = tested.model.queryTypes[Scenario::class]
+        val scenarioType = tested.model.queryTypes[ClassRef(Scenario::class)]
                 ?: throw Exception("Scenario type should be present in schema")
 
         val unionField = scenarioType["pdf"]
@@ -169,7 +170,7 @@ class SchemaBuilderTest {
             }
         }
 
-        val actorType = tested.model.queryTypes[Actor::class]
+        val actorType = tested.model.queryTypes[ClassRef(Actor::class)]
                 ?: throw Exception("Actor type should be present in schema")
         assertThat(actorType.kind, equalTo(TypeKind.OBJECT))
         val property = actorType["linked"] ?: throw Exception("Actor should have ext property 'linked'")
@@ -203,7 +204,7 @@ class SchemaBuilderTest {
             }
         }
 
-        val actorType = tested.model.queryTypes[Actor::class]
+        val actorType = tested.model.queryTypes[ClassRef(Actor::class)]
                 ?: throw Exception("Actor type should be present in schema")
         assertThat(actorType.kind, equalTo(TypeKind.OBJECT))
         val property = actorType["linked"] ?: throw Exception("Actor should have ext property 'linked'")
@@ -317,36 +318,54 @@ class SchemaBuilderTest {
     @Test
     fun `support for concrete generatic parameters`(){
         val schema = defaultSchema {
-            query("pair"){
+            query("pair1"){
                 resolver { int: Int, string: String -> (int to string) }
+            }
+            query("pair2"){
+                resolver { int: Int, string: String -> (string to int) }
             }
         }
 
         val typesIntrospection = deserialize(schema.executeBlocking("{__schema{queryType{fields{type { ofType { kind name fields { name type { kind ofType { kind name } }} }}}}}}"))
-        val expectedType = "{kind=OBJECT, name=Pair_Int_String, fields=[{name=first, type={kind=NON_NULL, ofType={kind=SCALAR, name=Int}}}, {name=second, type={kind=NON_NULL, ofType={kind=SCALAR, name=String}}}]}"
-        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[0]/type/ofType").toString(), equalTo(expectedType))
+        val expectedType1 = "{kind=OBJECT, name=Pair_Int_String, fields=[{name=first, type={kind=NON_NULL, ofType={kind=SCALAR, name=Int}}}, {name=second, type={kind=NON_NULL, ofType={kind=SCALAR, name=String}}}]}"
+        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[0]/type/ofType").toString(), equalTo(expectedType1))
+        val expectedType2 = "{kind=OBJECT, name=Pair_String_Int, fields=[{name=first, type={kind=NON_NULL, ofType={kind=SCALAR, name=String}}}, {name=second, type={kind=NON_NULL, ofType={kind=SCALAR, name=Int}}}]}"
+        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[1]/type/ofType").toString(), equalTo(expectedType2))
 
-        val query = deserialize(schema.executeBlocking("{ pair(int: 12, string: \"abc\") { first second } }"))
-        assertThat(query.extract<Int>("data/pair/first"), equalTo(12))
-        assertThat(query.extract<String>("data/pair/second"), equalTo("abc"))
+        val query1 = deserialize(schema.executeBlocking("{ pair1(int: 12, string: \"abc\") { first second } }"))
+        assertThat(query1.extract<Int>("data/pair1/first"), equalTo(12))
+        assertThat(query1.extract<String>("data/pair1/second"), equalTo("abc"))
+        val query2 = deserialize(schema.executeBlocking("{ pair2(int: 12, string: \"abc\") { first second } }"))
+        assertThat(query2.extract<String>("data/pair2/first"), equalTo("abc"))
+        assertThat(query2.extract<Int>("data/pair2/second"), equalTo(12))
     }
 
     @Test
     fun `support for collections with type parameters`() {
         val schema = defaultSchema {
-            query("pageable"){
+            query("pageable1"){
                 resolver { count: Long, string: String -> Pageable(count, string, listOf(string)) }
+            }
+            query("pageable2"){
+                resolver { count: Long, int: Int -> Pageable(count, int, listOf(int)) }
             }
         }
 
         val typesIntrospection = deserialize(schema.executeBlocking("{__schema{queryType{fields{type { ofType { kind name fields { name type { kind name ofType { kind name ofType { kind name ofType { name kind }} } }} }}}}}}"))
-        val expectedType = "{kind=OBJECT, name=Pageable_String, fields=[{name=first, type={kind=SCALAR, name=String, ofType=null}}, {name=items, type={kind=NON_NULL, name=null, ofType={kind=LIST, name=null, ofType={kind=NON_NULL, name=null, ofType={name=String, kind=SCALAR}}}}}, {name=total, type={kind=NON_NULL, name=null, ofType={kind=SCALAR, name=Long, ofType=null}}}]}"
-        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[0]/type/ofType").toString(), equalTo(expectedType))
+        val expectedType1 = "{kind=OBJECT, name=Pageable_String, fields=[{name=first, type={kind=SCALAR, name=String, ofType=null}}, {name=items, type={kind=NON_NULL, name=null, ofType={kind=LIST, name=null, ofType={kind=NON_NULL, name=null, ofType={name=String, kind=SCALAR}}}}}, {name=total, type={kind=NON_NULL, name=null, ofType={kind=SCALAR, name=Long, ofType=null}}}]}"
+        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[0]/type/ofType").toString(), equalTo(expectedType1))
+        val expectedType2 = "{kind=OBJECT, name=Pageable_Int, fields=[{name=first, type={kind=SCALAR, name=Int, ofType=null}}, {name=items, type={kind=NON_NULL, name=null, ofType={kind=LIST, name=null, ofType={kind=NON_NULL, name=null, ofType={name=Int, kind=SCALAR}}}}}, {name=total, type={kind=NON_NULL, name=null, ofType={kind=SCALAR, name=Long, ofType=null}}}]}"
+        assertThat(typesIntrospection.extract<Map<*,*>>("data/__schema/queryType/fields[1]/type/ofType").toString(), equalTo(expectedType2))
 
-        val query = deserialize(schema.executeBlocking("{ pageable(count: 12, string: \"abc\") { total first items } }"))
-        assertThat(query.extract<Int>("data/pageable/total"), equalTo(12))
-        assertThat(query.extract<String>("data/pageable/first"), equalTo("abc"))
-        assertThat(query.extract<String>("data/pageable/items[0]"), equalTo("abc"))
+        val query1 = deserialize(schema.executeBlocking("{ pageable1(count: 12, string: \"abc\") { total first items } }"))
+        assertThat(query1.extract<Int>("data/pageable1/total"), equalTo(12))
+        assertThat(query1.extract<String>("data/pageable1/first"), equalTo("abc"))
+        assertThat(query1.extract<String>("data/pageable1/items[0]"), equalTo("abc"))
+
+        val query2 = deserialize(schema.executeBlocking("{ pageable2(count: 12, int: 34) { total first items } }"))
+        assertThat(query2.extract<Int>("data/pageable2/total"), equalTo(12))
+        assertThat(query2.extract<Int>("data/pageable2/first"), equalTo(34))
+        assertThat(query2.extract<Int>("data/pageable2/items[0]"), equalTo(34))
     }
 
     @Test

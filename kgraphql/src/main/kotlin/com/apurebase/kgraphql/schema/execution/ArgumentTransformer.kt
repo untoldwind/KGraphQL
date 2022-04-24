@@ -6,6 +6,7 @@ import com.apurebase.kgraphql.schema.DefaultSchema
 import com.apurebase.kgraphql.schema.model.ast.ValueNode
 import com.apurebase.kgraphql.GraphQLError
 import com.apurebase.kgraphql.schema.scalar.deserializeScalar
+import com.apurebase.kgraphql.schema.structure.ClassRef
 import com.apurebase.kgraphql.schema.structure.InputValue
 import com.apurebase.kgraphql.schema.structure.Type
 import kotlin.reflect.KType
@@ -96,7 +97,7 @@ open class ArgumentTransformer(val schema : DefaultSchema) {
         } ?: schema.model.scalars[kClass]?.let { scalarType ->
             return deserializeScalar(scalarType, value)
         } ?: throw GraphQLError(
-            "Invalid argument value '${value.valueNodeName}' for type ${schema.model.inputTypes[kClass]?.name}",
+            "Invalid argument value '${value.valueNodeName}' for type ${schema.model.inputTypes[ClassRef(kClass)]?.name}",
             value
         )
     }
