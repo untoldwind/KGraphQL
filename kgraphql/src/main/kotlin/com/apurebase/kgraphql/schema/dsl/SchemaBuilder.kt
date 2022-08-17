@@ -15,6 +15,7 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.module.SimpleModule
+import com.fasterxml.jackson.databind.util.RawValue
 import kotlinx.coroutines.runBlocking
 import kotlin.reflect.KClass
 
@@ -70,6 +71,16 @@ class SchemaBuilder internal constructor() {
     // SCALAR
     //================================================================================
 
+    fun <T : Any> rawScalar(kClass: KClass<T>, block: ScalarDSL<T, RawValue>.() -> Unit) {
+        val scalar = RawScalarDSL(kClass).apply(block)
+        configuration.appendMapper(scalar, kClass)
+        model.addScalar(TypeDef.Scalar(scalar.name, kClass, scalar.createCoercion(), scalar.description))
+    }
+
+    inline fun <reified T : Any> rawScalar(noinline block: ScalarDSL<T, RawValue>.() -> Unit) {
+        rawScalar(T::class, block)
+    }
+    
     fun <T : Any> stringScalar(kClass: KClass<T>, block: ScalarDSL<T, String>.() -> Unit) {
         val scalar = StringScalarDSL(kClass).apply(block)
         configuration.appendMapper(scalar, kClass)
