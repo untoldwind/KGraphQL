@@ -1,7 +1,7 @@
 plugins {
     base
     application
-    kotlin("jvm") version "1.6.20"
+    kotlin("jvm") version "1.7.10"
     id("org.jetbrains.dokka") version "1.4.32"
     signing
 }
