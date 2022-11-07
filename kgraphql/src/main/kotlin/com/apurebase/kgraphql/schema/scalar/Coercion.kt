@@ -100,7 +100,7 @@ fun <T> serializeScalar(scalar: Type.Scalar<*>, value: T, executionNode: Executi
         JsonPrimitive((scalar.coercion as BooleanScalarCoercion<T>).serialize(value))
     }
     is RawScalarCoercion<*> -> {
-        Json.Default.parseToJsonElement((scalar.coercion as RawScalarCoercion<T>).serialize(value).toString())
+        Json.Default.parseToJsonElement((scalar.coercion as RawScalarCoercion<T>).serialize(value).rawValue().toString())
     }
     else -> throw ExecutionException("Unsupported coercion for scalar type ${scalar.name}", executionNode)
 }
